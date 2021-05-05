@@ -29,6 +29,20 @@
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPath()" label="Procurar Caminho Euclidiano" />
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPathManhattan()" label="Procurar Caminho Manhattan" />
       </div>
+      <div class="row full-width text-subtitle1 q-mt-sm">
+        <div class="col row justify-end">
+          <q-toggle
+            v-model="showInvisibleObstaclesEuclidian"
+            label="Mostrar todo o caminho euclidiano"
+          />
+        </div>
+        <div class="col row justify-start">
+          <q-toggle
+            v-model="showInvisibleObstaclesManhattan"
+            label="Mostrar todo o caminho de Manhattan"
+          />
+        </div>
+      </div>
     </div>
     <table>
       <tr v-for="(row, indexR) in rows" :key="indexR">
@@ -39,6 +53,8 @@
               ${(agentPosition.row === indexR && agentPosition.col === indexC) ? 'initialCel' : ''}
               ${(goalPosition.row === indexR && goalPosition.col === indexC) ? 'goalCel' : ''}
               ${obstacles.find(element => (element.row === indexR && element.col === indexC)) ? 'obstacleCel' : ''}
+              ${showInvisibleObstaclesEuclidian && (invisibleObstaclesEuclidian.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleEuc' : ''}
+              ${showInvisibleObstaclesManhattan && (invisibleObstaclesManhattan.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleMan' : ''}
               ${resolutionPath.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPath' : ''}
               ${resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPathManhattan' : ''}
               ${resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC))
@@ -82,7 +98,10 @@ export default {
       invisibleObstaclesManhattan: [],
       invisibleObstaclesEuclidian: [],
       findingPath: false,
-      searchedPath: false
+      searchedPath: false,
+
+      showInvisibleObstaclesEuclidian: false,
+      showInvisibleObstaclesManhattan: false
     }
   },
   methods: {
@@ -451,8 +470,16 @@ export default {
   background-color: red;
 }
 
+.invisibleEuc {
+  background-color: rgba(255,0,0,.5);
+}
+
 .resolutionPathManhattan {
   background-color: purple;
+}
+
+.invisibleMan {
+  background-color: rgba(255,0,255,.5)
 }
 
 .dualPath {
