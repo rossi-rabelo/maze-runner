@@ -29,8 +29,9 @@
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPath()" label="Procurar Caminho Euclidiano" />
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPathManhattan()" label="Procurar Caminho Manhattan" />
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPathDeepSearch()" label="Busca em Profundidade" />
+        <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPathWideSearch()" label="Busca em Largura" />
       </div>
-      <div class="row full-width text-subtitle1 q-mt-sm">
+      <div v-if="state === 3" class="row full-width text-subtitle1 q-mt-sm">
         <div class="col row justify-end">
           <q-toggle
             v-model="showInvisibleObstaclesEuclidian"
@@ -43,10 +44,16 @@
             label="Mostrar todo o caminho de Manhattan"
           />
         </div>
-        <div class="col row justify-start">
+        <div class="col row justify-center">
           <q-toggle
             v-model="showInvisibleObstaclesDeepSearch"
             label="Mostrar todo o caminho da busca em profundidade"
+          />
+        </div>
+        <div class="col row justify-start">
+          <q-toggle
+            v-model="showInvisibleObstaclesWideSearch"
+            label="Mostrar todo o caminho da busca em largura"
           />
         </div>
       </div>
@@ -57,18 +64,21 @@
           <div
             @click="doStateAction(indexR, indexC)"
             :class="`cel
-              ${(agentPosition.row === indexR && agentPosition.col === indexC) ? 'initialCel' : ''}
-              ${(goalPosition.row === indexR && goalPosition.col === indexC) ? 'goalCel' : ''}
               ${obstacles.find(element => (element.row === indexR && element.col === indexC)) ? 'obstacleCel' : ''}
               ${showInvisibleObstaclesEuclidian && (invisibleObstaclesEuclidian.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleEuc' : ''}
               ${showInvisibleObstaclesManhattan && (invisibleObstaclesManhattan.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleMan' : ''}
               ${showInvisibleObstaclesDeepSearch && (invisibleObstaclesDeepSearch.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleDeepSearch' : ''}
+              ${showInvisibleObstaclesWideSearch && (invisibleObstaclesWideSearch.find(el => (el.row === indexR && el.col === indexC))) ? 'invisiblePathWideSeach' : ''}
               ${resolutionPath.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPath' : ''}
               ${resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPathManhattan' : ''}
               ${resolutionPathDeepSearch.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPathDeepSearch' : ''}
+              ${resolutionPathWideSearch.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPathWideSearch' : ''}
               ${checkResolutionPositionNumber(indexR, indexC) === 2
                 ? 'dualPath'
-                : (checkResolutionPositionNumber(indexR, indexC) === 3 ? 'triPath' : '')}
+                : (checkResolutionPositionNumber(indexR, indexC) === 3
+                ? 'triPath' : ((checkResolutionPositionNumber(indexR, indexC) === 4) ? 'quadriPath' : ''))}
+              ${(agentPosition.row === indexR && agentPosition.col === indexC) ? 'initialCel' : ''}
+              ${(goalPosition.row === indexR && goalPosition.col === indexC) ? 'goalCel' : ''}
             `"
           >
           </div>
@@ -106,17 +116,21 @@ export default {
       resolutionPath: [],
       resolutionPathManhattan: [],
       resolutionPathDeepSearch: [],
+      resolutionPathWideSearch: [],
 
       invisibleObstaclesManhattan: [],
       invisibleObstaclesEuclidian: [],
       invisibleObstaclesDeepSearch: [],
+      invisibleObstaclesWideSearch: [],
+      queue: [], // For wide search only
 
       findingPath: false,
       searchedPath: false,
 
       showInvisibleObstaclesEuclidian: false,
       showInvisibleObstaclesManhattan: false,
-      showInvisibleObstaclesDeepSearch: false
+      showInvisibleObstaclesDeepSearch: false,
+      showInvisibleObstaclesWideSearch: true
     }
   },
   methods: {
@@ -291,7 +305,7 @@ export default {
       this.invisibleObstaclesDeepSearch = []
       // Heurística utilizada será a distância euclidiana
       this.currentAgentPosition = JSON.parse(JSON.stringify(this.agentPosition))
-      this.resolutionPath.push(this.currentAgentPosition)
+      this.resolutionPathDeepSearch.push(this.currentAgentPosition)
       this.pathFound = false
 
       while (!this.pathFound) {
@@ -329,6 +343,77 @@ export default {
       }
 
       this.findingPath = false
+    },
+    async findPathWideSearch () {
+      this.findingPath = true
+      this.searchedPath = true
+      this.resolutionPathWideSearch = []
+      this.invisibleObstaclesWideSearch = []
+      // Heurística utilizada será a distância euclidiana
+      this.currentAgentPosition = JSON.parse(JSON.stringify(this.agentPosition))
+      this.resolutionPathWideSearch.push(this.currentAgentPosition)
+      this.pathFound = false
+      let control = false
+
+      while (!this.pathFound) {
+        console.log('-------------')
+        if ((this.currentAgentPosition.row === this.goalPosition.row) && (this.currentAgentPosition.col === this.goalPosition.col)) {
+          this.pathFound = true
+        } else {
+          let allowedMovements = this.validateSteps(this.currentAgentPosition, 4)
+          let expansion = this.expandChildrenKnots(this.currentAgentPosition, allowedMovements)
+
+          this.queue = this.queue.concat(expansion)
+          this.currentAgentPosition = this.queue.shift()
+
+          if (!this.currentAgentPosition) {
+            this.pathFound = true
+            this.$q.notify({
+              message: 'Não foi possível encontrar um caminho para o objetivo!!',
+              color: 'negative'
+            })
+            this.findingPath = false
+            return null
+          }
+          this.invisibleObstaclesWideSearch.push(this.currentAgentPosition)
+
+          await this.sleep(150)
+          // debugger
+        }
+      }
+      let currentKnot = this.currentAgentPosition
+      while (!control) {
+        let father = currentKnot.father
+        if (!father) {
+          control = true
+        } else {
+          this.resolutionPathWideSearch.push(father)
+          this.invisibleObstaclesWideSearch = this.invisibleObstaclesWideSearch.filter((el) => !(el.row === father.row && el.col === father.col))
+          await this.sleep(150)
+          console.log(this.resolutionPathWideSearch)
+          currentKnot = father
+        }
+      }
+
+      this.findingPath = false
+    },
+    expandChildrenKnots (position, allowedMovements) {
+      const knots = []
+      if (allowedMovements.up) {
+        knots.push({row: position.row - 1, col: position.col, father: position})
+      }
+      if (allowedMovements.down) {
+        knots.push({row: position.row + 1, col: position.col, father: position})
+      }
+      if (allowedMovements.left) {
+        knots.push({row: position.row, col: position.col - 1, father: position})
+      }
+      if (allowedMovements.right) {
+        knots.push({row: position.row, col: position.col + 1, father: position})
+      }
+
+      console.log(knots)
+      return knots
     },
     manhattanDistance (agentPosition, goalPosition) {
       return Math.abs(agentPosition.row - goalPosition.row) + Math.abs(agentPosition.col - goalPosition.col)
@@ -537,14 +622,25 @@ export default {
           return false
         }
         return true
+      } else if (euristic === 4) {
+        if (this.obstacles.find(element => (element.row === position.row && element.col === position.col))
+          || this.resolutionPathWideSearch.find(element => (element.row === position.row && element.col === position.col))
+          || this.invisibleObstaclesWideSearch.find(element => (element.row === position.row && element.col === position.col))
+          || this.queue.find(element => (element.row === position.row && element.col === position.col))
+          || (this.agentPosition.row === position.row && this.agentPosition.col === position.col)
+          ) {
+          return false
+        }
+        return true
       }
     },
     checkResolutionPositionNumber (indexR, indexC) {
       const euclidian = this.resolutionPath.find(element => (element.row === indexR && element.col === indexC))
       const manhattan = this.resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC))
       const deepSearch = this.resolutionPathDeepSearch.find(element => (element.row === indexR && element.col === indexC))
+      const wideSearch = this.resolutionPathWideSearch.find(element => (element.row === indexR && element.col === indexC))
       
-      return [euclidian, manhattan, deepSearch].filter(el => el).length
+      return [euclidian, manhattan, deepSearch, wideSearch].filter(el => el).length
     },
     reset () {
       this.state = 1
@@ -562,10 +658,14 @@ export default {
       this.resolutionPath = []
       this.resolutionPathManhattan = []
       this.resolutionPathDeepSearch = []
+      this.resolutionPathWideSearch = []
 
       this.invisibleObstaclesEuclidian = []
       this.invisibleObstaclesManhattan = []
       this.invisibleObstaclesDeepSearch = []
+      this.invisibleObstaclesWideSearch = []
+
+      this.queue = []
     },
     sleep(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
@@ -591,19 +691,19 @@ export default {
 }
 
 .obstacleCel {
-  background-color: black;
+  background-color: black
 }
 
 .resolutionPath {
-  background-color: red;
+  background-color: red
 }
 
 .invisibleEuc {
-  background-color: rgba(255,0,0,.5);
+  background-color: rgba(255,0,0,.5)
 }
 
 .resolutionPathManhattan {
-  background-color: purple;
+  background-color: purple
 }
 
 .invisibleMan {
@@ -618,11 +718,23 @@ export default {
   background-color: rgba(255, 255, 0, .5)
 }
 
+.resolutionPathWideSearch {
+  background-color: rgb(99, 66, 54)
+}
+
+.invisiblePathWideSeach {
+  background-color: rgba(99, 66, 54, .5)
+}
+
 .dualPath {
-  background-color: cyan;
+  background-color: cyan !important
 }
 
 .triPath {
-  background-color: #ff8100;
+  background-color: #ff8100 !important
+}
+
+.quadriSearch {
+  background-color: rgb(39, 248, 32);
 }
 </style>
