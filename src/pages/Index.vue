@@ -28,6 +28,7 @@
         <q-btn :disable="this.findingPath" class="q-mx-sm" outline no-caps rounded color="secondary" @click="reset()" label="Resetar" />
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPath()" label="Procurar Caminho Euclidiano" />
         <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPathManhattan()" label="Procurar Caminho Manhattan" />
+        <q-btn :disable="this.findingPath" v-if="state === 3" class="q-mx-sm" outline no-caps rounded color="negative" @click="findPathDeepSearch()" label="Busca em Profundidade" />
       </div>
       <div class="row full-width text-subtitle1 q-mt-sm">
         <div class="col row justify-end">
@@ -36,10 +37,16 @@
             label="Mostrar todo o caminho euclidiano"
           />
         </div>
-        <div class="col row justify-start">
+        <div class="col row justify-center">
           <q-toggle
             v-model="showInvisibleObstaclesManhattan"
             label="Mostrar todo o caminho de Manhattan"
+          />
+        </div>
+        <div class="col row justify-start">
+          <q-toggle
+            v-model="showInvisibleObstaclesDeepSearch"
+            label="Mostrar todo o caminho da busca em profundidade"
           />
         </div>
       </div>
@@ -55,10 +62,13 @@
               ${obstacles.find(element => (element.row === indexR && element.col === indexC)) ? 'obstacleCel' : ''}
               ${showInvisibleObstaclesEuclidian && (invisibleObstaclesEuclidian.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleEuc' : ''}
               ${showInvisibleObstaclesManhattan && (invisibleObstaclesManhattan.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleMan' : ''}
+              ${showInvisibleObstaclesDeepSearch && (invisibleObstaclesDeepSearch.find(el => (el.row === indexR && el.col === indexC))) ? 'invisibleDeepSearch' : ''}
               ${resolutionPath.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPath' : ''}
               ${resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPathManhattan' : ''}
-              ${resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC))
-              && resolutionPath.find(element => (element.row === indexR && element.col === indexC)) ? 'dualPath' : ''}
+              ${resolutionPathDeepSearch.find(element => (element.row === indexR && element.col === indexC)) ? 'resolutionPathDeepSearch' : ''}
+              ${checkResolutionPositionNumber(indexR, indexC) === 2
+                ? 'dualPath'
+                : (checkResolutionPositionNumber(indexR, indexC) === 3 ? 'triPath' : '')}
             `"
           >
           </div>
@@ -92,16 +102,21 @@ export default {
       obstaclesNumber: 0,
       obstacles: [],
       pathFound: false,
+
       resolutionPath: [],
       resolutionPathManhattan: [],
+      resolutionPathDeepSearch: [],
 
       invisibleObstaclesManhattan: [],
       invisibleObstaclesEuclidian: [],
+      invisibleObstaclesDeepSearch: [],
+
       findingPath: false,
       searchedPath: false,
 
       showInvisibleObstaclesEuclidian: false,
-      showInvisibleObstaclesManhattan: false
+      showInvisibleObstaclesManhattan: false,
+      showInvisibleObstaclesDeepSearch: false
     }
   },
   methods: {
@@ -269,6 +284,52 @@ export default {
       }
       this.findingPath = false
     },
+    async findPathDeepSearch () {
+      this.findingPath = true
+      this.searchedPath = true
+      this.resolutionPathDeepSearch = []
+      this.invisibleObstaclesDeepSearch = []
+      // Heurística utilizada será a distância euclidiana
+      this.currentAgentPosition = JSON.parse(JSON.stringify(this.agentPosition))
+      this.resolutionPath.push(this.currentAgentPosition)
+      this.pathFound = false
+
+      while (!this.pathFound) {
+        console.log('-------------')
+        if ((this.currentAgentPosition.row === this.goalPosition.row) && (this.currentAgentPosition.col === this.goalPosition.col)) {
+          this.pathFound = true
+        } else {
+          let allowedMovements = this.validateSteps(this.currentAgentPosition, 3)
+    
+          let minimumMovement = this.calculateDeepSearchMovement(this.currentAgentPosition, allowedMovements)
+    
+          if (minimumMovement) {
+            console.log('MELHOR MOVIMENTO => ', minimumMovement)
+            this.currentAgentPosition = this.updatePosition(this.currentAgentPosition, minimumMovement)
+    
+            this.resolutionPathDeepSearch.push(this.currentAgentPosition)
+            console.log('NOVA POSIÇÃO DO AGENTE => ', this.currentAgentPosition)
+          } else {
+            this.invisibleObstaclesDeepSearch.push(this.currentAgentPosition)
+            this.resolutionPathDeepSearch.pop()
+            this.currentAgentPosition = this.resolutionPathDeepSearch[this.resolutionPathDeepSearch.length - 1]
+
+            if (!this.resolutionPathDeepSearch.length) {
+              this.pathFound = true
+              this.$q.notify({
+                message: 'Não foi possível encontrar um caminho para o objetivo!!',
+                color: 'negative'
+              })
+            }
+          }
+
+           await this.sleep(150)
+          // debugger
+        }
+      }
+
+      this.findingPath = false
+    },
     manhattanDistance (agentPosition, goalPosition) {
       return Math.abs(agentPosition.row - goalPosition.row) + Math.abs(agentPosition.col - goalPosition.col)
     },
@@ -391,6 +452,53 @@ export default {
 
       return minimumMovement
     },
+    calculateDeepSearchMovement (agentPosition, allowedMovements) {
+      const distances = {
+        up: null,
+        down: null,
+        left: null,
+        right: null
+      }
+
+      if (allowedMovements.up) {
+        distances.up = 0
+      }
+      if (allowedMovements.left) {
+        distances.left = 0
+      }
+      if (allowedMovements.right) {
+        distances.right = 0
+      }
+      if (allowedMovements.down) {
+        distances.down = 0
+      }
+
+      console.log('DISTANCES => ', distances)
+
+      let arrayDistances = Object.values(distances)
+      arrayDistances = arrayDistances.map((element) => {
+        if (element === null) {
+          return 999999999
+        } else {
+          return element
+        }
+      })
+      arrayDistances = arrayDistances.sort((a, b) => {
+        return a - b
+      })
+      
+      const minimumDistance = arrayDistances[0]
+      let minimumMovement = null
+
+      Object.keys(distances).forEach((key) => {
+        if (distances[key] === minimumDistance) {
+          minimumMovement = key
+          return
+        }
+      })
+
+      return minimumMovement
+    },
     updatePosition(currentPosition, movement) {
       const movementsActions = {
         up: () => { return {row: currentPosition.row - 1, col: currentPosition.col }},
@@ -406,6 +514,7 @@ export default {
         if (this.obstacles.find(element => (element.row === position.row && element.col === position.col))
           || this.resolutionPath.find(element => (element.row === position.row && element.col === position.col))
           || this.invisibleObstaclesEuclidian.find(element => (element.row === position.row && element.col === position.col))
+          || (this.agentPosition.row === position.row && this.agentPosition.col === position.col)
           ) {
           return false
         }
@@ -414,11 +523,28 @@ export default {
         if (this.obstacles.find(element => (element.row === position.row && element.col === position.col))
           || this.resolutionPathManhattan.find(element => (element.row === position.row && element.col === position.col))
           || this.invisibleObstaclesManhattan.find(element => (element.row === position.row && element.col === position.col))
+          || (this.agentPosition.row === position.row && this.agentPosition.col === position.col)
+          ) {
+          return false
+        }
+        return true
+      } else if (euristic === 3) {
+        if (this.obstacles.find(element => (element.row === position.row && element.col === position.col))
+          || this.resolutionPathDeepSearch.find(element => (element.row === position.row && element.col === position.col))
+          || this.invisibleObstaclesDeepSearch.find(element => (element.row === position.row && element.col === position.col))
+          || (this.agentPosition.row === position.row && this.agentPosition.col === position.col)
           ) {
           return false
         }
         return true
       }
+    },
+    checkResolutionPositionNumber (indexR, indexC) {
+      const euclidian = this.resolutionPath.find(element => (element.row === indexR && element.col === indexC))
+      const manhattan = this.resolutionPathManhattan.find(element => (element.row === indexR && element.col === indexC))
+      const deepSearch = this.resolutionPathDeepSearch.find(element => (element.row === indexR && element.col === indexC))
+      
+      return [euclidian, manhattan, deepSearch].filter(el => el).length
     },
     reset () {
       this.state = 1
@@ -435,9 +561,11 @@ export default {
       }
       this.resolutionPath = []
       this.resolutionPathManhattan = []
+      this.resolutionPathDeepSearch = []
 
       this.invisibleObstaclesEuclidian = []
       this.invisibleObstaclesManhattan = []
+      this.invisibleObstaclesDeepSearch = []
     },
     sleep(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
@@ -482,7 +610,19 @@ export default {
   background-color: rgba(255,0,255,.5)
 }
 
+.resolutionPathDeepSearch {
+  background-color: yellow
+}
+
+.invisibleDeepSearch {
+  background-color: rgba(255, 255, 0, .5)
+}
+
 .dualPath {
   background-color: cyan;
+}
+
+.triPath {
+  background-color: #ff8100;
 }
 </style>
